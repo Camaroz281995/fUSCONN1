@@ -7,27 +7,18 @@ function getDB() {
     process.env.fusconn_DATABASE_URL ||
     process.env.fusconn_POSTGRES_URL
 
-  if (!url) {
-    throw new Error("No database URL configured")
-  }
+  if (!url) throw new Error("No database URL configured")
 
   return neon(url)
 }
 
-// GET ALL POSTS
 export async function GET() {
   try {
     const sql = getDB()
 
     const posts = await sql`
-      SELECT 
-        p.id,
-        p.username,
-        p.content,
-        p.image_url,
-        p.video_url,
-        p.gif_url,
-        p.created_at,
+      SELECT
+        p.*,
 
         COALESCE(
           (
@@ -51,7 +42,6 @@ export async function GET() {
                 'content', c.content,
                 'created_at', c.created_at
               )
-              ORDER BY c.created_at ASC
             )
             FROM comments c
             WHERE c.post_id = p.id
@@ -84,7 +74,6 @@ export async function GET() {
 }
 
 
-// CREATE POST
 export async function POST(request: NextRequest) {
   try {
     const sql = getDB()
@@ -148,7 +137,6 @@ export async function POST(request: NextRequest) {
         status: 201,
       }
     )
-
 
   } catch (err) {
     console.error("POST /api/posts error:", err)
