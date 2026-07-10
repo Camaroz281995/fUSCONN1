@@ -37,49 +37,73 @@ function saveToStorage<T>(key: string, data: T): void {
 }
 
 class PersistentStorage {
-  // Posts
-  savePosts(posts: Post[]): void {
-    saveToStorage("fusion_connect_posts", posts)
-  }
+// Posts - Shared through Neon database API
 
-  getPosts(): Post[] {
-    return getFromStorage<Post[]>("fusion_connect_posts", [])
-  }
+async getPosts(): Promise<Post[]> {
+  try {
+    const response = await fetch("/api/posts", {
+      cache: "no-store",
+    })
 
-  savePost(post: Post): void {
-    const posts = this.getPosts()
-    const existingIndex = posts.findIndex((p) => p.id === post.id)
-
-    if (existingIndex >= 0) {
-      // Update existing post
-      posts[existingIndex] = post
-    } else {
-      // Add new post at the beginning (newest first)
-      posts.unshift(post)
+    if (!response.ok) {
+      throw new Error("Failed to fetch posts")
     }
 
-    // Sort posts by timestamp to ensure consistent ordering (newest first)
-    posts.sort((a, b) => b.timestamp - a.timestamp)
+    const data = await response.json()
 
-    saveToStorage("fusion_connect_posts", posts)
+    return data.posts || []
+  } catch (error) {
+    console.error("Error loading posts:", error)
+    return []
+  }
+}
 
-    // Trigger custom event for real-time updates
+
+async savePost(post: Post): Promise<void> {
+  try {
+    const response = await fetch("/api/posts", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        username: post.username,
+        content: post.content,
+        imageUrl: post.imageUrl,
+        videoUrl: post.videoUrl,
+        gifUrl: post.gifUrl,
+      }),
+    })
+
+    if (!response.ok) {
+      throw new Error("Failed to save post")
+    }
+
+    // Update UI instantly
     if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent("newPostCreated", { detail: post }))
+      window.dispatchEvent(
+        new CustomEvent("newPostCreated", {
+          detail: post,
+        })
+      )
     }
-  }
 
-  // Add alias method for compatibility
-  addPost(post: Post): void {
-    this.savePost(post)
+  } catch (error) {
+    console.error("Error saving post:", error)
   }
+}
 
-  deletePost(postId: string): void {
-    const posts = this.getPosts()
-    const updatedPosts = posts.filter((post) => post.id !== postId)
-    saveToStorage("fusion_connect_posts", updatedPosts)
-  }
 
+async addPost(post: Post): Promise<void> {
+  return this.savePost(post)
+}
+
+
+deletePost(postId: string): void {
+  console.warn(
+    "Delete post still uses local storage. Add /api/posts DELETE route to enable database deletion."
+  )
+}
   // Comments
   addComment(postId: string, comment: Comment): void {
     const posts = this.getPosts()
