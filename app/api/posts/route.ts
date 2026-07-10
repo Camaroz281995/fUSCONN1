@@ -16,21 +16,13 @@ function getDB() {
   return neon(url)
 }
 
-
-// GET POSTS
 export async function GET() {
   try {
     const sql = getDB()
 
     const posts = await sql`
       SELECT
-        p.id,
-        p.username,
-        p.content,
-        p.image_url,
-        p.video_url,
-        p.gif_url,
-        p.created_at,
+        p.*,
 
         COALESCE(
           (
@@ -68,9 +60,7 @@ export async function GET() {
     `
 
     return NextResponse.json(
-      {
-        posts,
-      },
+      { posts },
       {
         headers: {
           "Cache-Control": "no-store, max-age=0",
@@ -78,27 +68,25 @@ export async function GET() {
       }
     )
 
-  } catch (error) {
-    console.error("GET /api/posts error:", error)
+  } catch (err) {
+    console.error("GET /api/posts error:", err)
 
     return NextResponse.json(
-      {
-        error: "Failed to fetch posts",
-      },
+      { error: "Failed to fetch posts" },
       {
         status: 500,
+        headers: {
+          "Cache-Control": "no-store",
+        },
       }
     )
   }
 }
 
 
-// CREATE POST
 export async function POST(request: NextRequest) {
   try {
     const sql = getDB()
-
-    const body = await request.json()
 
     const {
       username,
@@ -106,10 +94,9 @@ export async function POST(request: NextRequest) {
       imageUrl,
       videoUrl,
       gifUrl,
-    } = body
+    } = await request.json()
 
-
-    if (!username || !content || !content.trim()) {
+    if (!username || !content?.trim()) {
       return NextResponse.json(
         {
           error: "Username and content are required",
@@ -120,15 +107,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-
-    const id =
-      `post_${Date.now()}_${Math.random()
-        .toString(36)
-        .substring(2, 10)}`
-
+    const id = `post_${Date.now()}_${Math.random()
+      .toString(36)
+      .substring(2, 9)}`
 
     const createdAt = Date.now()
-
 
     await sql`
       INSERT INTO posts (
@@ -151,7 +134,6 @@ export async function POST(request: NextRequest) {
       )
     `
 
-
     return NextResponse.json(
       {
         success: true,
@@ -162,9 +144,8 @@ export async function POST(request: NextRequest) {
       }
     )
 
-
-  } catch (error) {
-    console.error("POST /api/posts error:", error)
+  } catch (err) {
+    console.error("POST /api/posts error:", err)
 
     return NextResponse.json(
       {
@@ -172,6 +153,9 @@ export async function POST(request: NextRequest) {
       },
       {
         status: 500,
+        headers: {
+          "Cache-Control": "no-store",
+        },
       }
     )
   }
