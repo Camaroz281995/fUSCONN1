@@ -104,44 +104,61 @@ deletePost(postId: string): void {
     "Delete post still uses local storage. Add /api/posts DELETE route to enable database deletion."
   )
 }
-  // Comments
-  addComment(postId: string, comment: Comment): void {
-    const posts = this.getPosts()
-    const postIndex = posts.findIndex((p) => p.id === postId)
+// Comments
+async addComment(postId: string, comment: Comment): Promise<void> {
+  const posts = await this.getPosts()
 
-    if (postIndex >= 0) {
-      if (!posts[postIndex].comments) {
-        posts[postIndex].comments = []
-      }
+  const postIndex = posts.findIndex((p) => p.id === postId)
 
-      posts[postIndex].comments!.push(comment)
-      saveToStorage("fusion_connect_posts", posts)
+  if (postIndex >= 0) {
+    if (!posts[postIndex].comments) {
+      posts[postIndex].comments = []
     }
-  }
 
-  saveComment(postId: string, comment: Comment): void {
-    this.addComment(postId, comment)
-  }
+    posts[postIndex].comments!.push(comment)
 
+    console.warn(
+      "Comments still need an API route to save permanently."
+    )
+  }
+}
+
+async saveComment(postId: string, comment: Comment): Promise<void> {
+  return this.addComment(postId, comment)
+}
   // Likes
-  toggleLike(postId: string, username: string): void {
-    const posts = this.getPosts()
-    const postIndex = posts.findIndex(p => p.id === postId)
-    if (postIndex !== -1) {
-      if (!posts[postIndex].likes) {
-        posts[postIndex].likes = []
-      }
-      const likes = posts[postIndex].likes!
-      const likeIndex = likes.indexOf(username)
-      if (likeIndex === -1) {
-        likes.push(username)
-      } else {
-        likes.splice(likeIndex, 1)
-      }
-      saveToStorage("fusion_connect_posts", posts)
-    }
-  }
+async toggleLike(postId: string, username: string): Promise<void> {
+  const posts = await this.getPosts()
 
+  const postIndex = posts.findIndex(
+    (p) => p.id === postId
+  )
+
+  if (postIndex !== -1) {
+    if (!posts[postIndex].likes) {
+      posts[postIndex].likes = []
+    }
+
+    const likes = posts[postIndex].likes!
+
+    const likeIndex = likes.findIndex(
+      (like: any) =>
+        typeof like === "string"
+          ? like === username
+          : like.username === username
+    )
+
+    if (likeIndex === -1) {
+      likes.push(username as any)
+    } else {
+      likes.splice(likeIndex, 1)
+    }
+
+    console.warn(
+      "Likes still need an API route to save permanently."
+    )
+  }
+}
   // Marketplace
   saveMarketplaceListing(listing: MarketplaceListing): void {
     const listings = this.getMarketplaceListings()
