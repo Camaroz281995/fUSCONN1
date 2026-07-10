@@ -1,24 +1,36 @@
 import { NextRequest, NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
 
+export const dynamic = "force-dynamic"
+
 function getDB() {
   const url =
     process.env.fusconn_DATABASE_URL_UNPOOLED ||
     process.env.fusconn_DATABASE_URL ||
     process.env.fusconn_POSTGRES_URL
 
-  if (!url) throw new Error("No database URL configured")
+  if (!url) {
+    throw new Error("No database URL configured")
+  }
 
   return neon(url)
 }
 
+
+// GET POSTS
 export async function GET() {
   try {
     const sql = getDB()
 
     const posts = await sql`
       SELECT
-        p.*,
+        p.id,
+        p.username,
+        p.content,
+        p.image_url,
+        p.video_url,
+        p.gif_url,
+        p.created_at,
 
         COALESCE(
           (
@@ -30,7 +42,7 @@ export async function GET() {
             FROM post_likes pl
             WHERE pl.post_id = p.id
           ),
-          '[]'
+          '[]'::json
         ) AS likes,
 
         COALESCE(
@@ -42,11 +54,12 @@ export async function GET() {
                 'content', c.content,
                 'created_at', c.created_at
               )
+              ORDER BY c.created_at ASC
             )
             FROM comments c
             WHERE c.post_id = p.id
           ),
-          '[]'
+          '[]'::json
         ) AS comments
 
       FROM posts p
@@ -55,28 +68,37 @@ export async function GET() {
     `
 
     return NextResponse.json(
-      { posts },
+      {
+        posts,
+      },
       {
         headers: {
-          "Cache-Control": "no-store",
+          "Cache-Control": "no-store, max-age=0",
         },
       }
     )
 
-  } catch (err) {
-    console.error("GET /api/posts error:", err)
+  } catch (error) {
+    console.error("GET /api/posts error:", error)
 
     return NextResponse.json(
-      { error: "Failed to fetch posts" },
-      { status: 500 }
+      {
+        error: "Failed to fetch posts",
+      },
+      {
+        status: 500,
+      }
     )
   }
 }
 
 
+// CREATE POST
 export async function POST(request: NextRequest) {
   try {
     const sql = getDB()
+
+    const body = await request.json()
 
     const {
       username,
@@ -84,10 +106,10 @@ export async function POST(request: NextRequest) {
       imageUrl,
       videoUrl,
       gifUrl,
-    } = await request.json()
+    } = body
 
 
-    if (!username || !content?.trim()) {
+    if (!username || !content || !content.trim()) {
       return NextResponse.json(
         {
           error: "Username and content are required",
@@ -99,9 +121,11 @@ export async function POST(request: NextRequest) {
     }
 
 
-    const id = `post_${Date.now()}_${Math.random()
-      .toString(36)
-      .substring(2, 9)}`
+    const id =
+      `post_${Date.now()}_${Math.random()
+        .toString(36)
+        .substring(2, 10)}`
+
 
     const createdAt = Date.now()
 
@@ -138,8 +162,9 @@ export async function POST(request: NextRequest) {
       }
     )
 
-  } catch (err) {
-    console.error("POST /api/posts error:", err)
+
+  } catch (error) {
+    console.error("POST /api/posts error:", error)
 
     return NextResponse.json(
       {
