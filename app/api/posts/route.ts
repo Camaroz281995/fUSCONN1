@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
 
-export const dynamic = "force-dynamic"
-
-process.env.fUSCONN_DATABASE_URL ||
-process.env.fUSCONN_POSTGRES_URL ||
-process.env.fUSCONN_POSTGRES_URL_NON_POOLING
+function getDB() {
+  const url =
+    process.env.fUSCONN_DATABASE_URL ||
+    process.env.fUSCONN_POSTGRES_URL ||
+    process.env.fUSCONN_POSTGRES_URL_NON_POOLING
 
   if (!url) {
     throw new Error("No database URL configured")
@@ -13,7 +13,6 @@ process.env.fUSCONN_POSTGRES_URL_NON_POOLING
 
   return neon(url)
 }
-
 export async function GET() {
   try {
     const sql = getDB()
