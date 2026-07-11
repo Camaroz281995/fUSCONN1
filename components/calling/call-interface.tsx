@@ -122,15 +122,18 @@ export default function CallInterface({
           if (!startedRef.current) startedRef.current = Date.now()
         }
 
-        pc.onconnectionstatechange = () => {
-          if (pc.connectionState === "connected") {
-            setCallStatus("connected")
-            if (!startedRef.current) startedRef.current = Date.now()
-          }
-          if (["disconnected", "failed", "closed"].includes(pc.connectionState)) {
-            endCall(false)
-          }
-        }
+pc.onconnectionstatechange = () => {
+  console.log("WebRTC state:", pc.connectionState)
+
+  if (pc.connectionState === "connected") {
+    setCallStatus("connected")
+    if (!startedRef.current) startedRef.current = Date.now()
+  }
+
+  if (["failed", "closed"].includes(pc.connectionState)) {
+    endCall(false)
+  }
+}
 
         if (isInitiator) {
           const offer = await pc.createOffer()
