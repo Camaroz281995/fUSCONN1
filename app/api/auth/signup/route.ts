@@ -2,13 +2,20 @@ import { NextRequest, NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
 
 export async function POST(request: NextRequest) {
- const dbUrl =
-  process.env.fUSCONN_DATABASE_URL ||
-  process.env.fUSCONN_POSTGRES_URL ||
-  process.env.fUSCONN_POSTGRES_URL_NON_POOLING
-    return NextResponse.json({ error: "Database not configured" }, { status: 500 })
+  const dbUrl =
+    process.env.fUSCONN_DATABASE_URL ||
+    process.env.fUSCONN_POSTGRES_URL ||
+    process.env.fUSCONN_POSTGRES_URL_NON_POOLING
+
+  if (!dbUrl) {
+    return NextResponse.json(
+      { error: "Database not configured" },
+      { status: 500 }
+    )
   }
+
   const sql = neon(dbUrl)
+
   try {
     const { username, email, password, fullName } = await request.json()
 
@@ -33,7 +40,6 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
-
     // Check if username already exists
     const existingUser = await sql`
       SELECT username FROM users WHERE username = ${username}
