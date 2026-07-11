@@ -3,11 +3,9 @@ import { neon } from "@neondatabase/serverless"
 
 export const dynamic = "force-dynamic"
 
-function getDB() {
-  const url =
-    process.env.fusconn_DATABASE_URL_UNPOOLED ||
-    process.env.fusconn_DATABASE_URL ||
-    process.env.fusconn_POSTGRES_URL
+process.env.fUSCONN_DATABASE_URL ||
+process.env.fUSCONN_POSTGRES_URL ||
+process.env.fUSCONN_POSTGRES_URL_NON_POOLING
 
   if (!url) {
     throw new Error("No database URL configured")
