@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
 
 export async function POST(request: NextRequest) {
-  const dbUrl = process.env.fusconn_DATABASE_URL_UNPOOLED || process.env.fusconn_DATABASE_URL || process.env.fusconn_POSTGRES_URL
-  if (!dbUrl) {
+ const dbUrl =
+  process.env.fUSCONN_DATABASE_URL ||
+  process.env.fUSCONN_POSTGRES_URL ||
+  process.env.fUSCONN_POSTGRES_URL_NON_POOLING
     return NextResponse.json({ error: "Database not configured" }, { status: 500 })
   }
   const sql = neon(dbUrl)
