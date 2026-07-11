@@ -93,11 +93,9 @@ async savePost(post: Post): Promise<void> {
   }
 }
 
-
 async addPost(post: Post): Promise<void> {
   return this.savePost(post)
 }
-
 
 deletePost(postId: string): void {
   console.warn(
