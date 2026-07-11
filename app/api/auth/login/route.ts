@@ -18,10 +18,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const { username, password } = await request.json()
-  try {
-    const { username, password } = await request.json()
 
-    // Validation
     if (!username || !password) {
       return NextResponse.json(
         { error: "Username and password are required" },
@@ -29,7 +26,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Find user
     const users = await sql`
       SELECT username, password_hash, full_name, bio, profile_photo
       FROM users
@@ -52,8 +48,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Update last_login
-    await sql`UPDATE users SET last_login = NOW() WHERE username = ${username}`
+    await sql`
+      UPDATE users 
+      SET last_login = NOW() 
+      WHERE username = ${username}
+    `
 
     return NextResponse.json(
       {
@@ -66,8 +65,10 @@ export async function POST(request: NextRequest) {
       },
       { status: 200 }
     )
+
   } catch (error) {
     console.error("Login error:", error)
+
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
