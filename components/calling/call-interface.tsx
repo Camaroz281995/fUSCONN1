@@ -19,9 +19,17 @@ interface CallInterfaceProps {
 }
 
 const ICE_SERVERS: RTCConfiguration = {
-  iceServers: [{ urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] }],
+  iceServers: [
+    {
+      urls: [
+        "stun:stun.l.google.com:19302",
+        "stun:stun1.l.google.com:19302",
+        "stun:stun2.l.google.com:19302",
+      ],
+    },
+  ],
+  iceCandidatePoolSize: 10,
 }
-
 export default function CallInterface({
   selfUsername,
   recipientUsername,
@@ -122,15 +130,52 @@ export default function CallInterface({
           if (!startedRef.current) startedRef.current = Date.now()
         }
 
-pc.onconnectionstatechange = () => {
-  console.log("WebRTC state:", pc.connectionState)
+pc.onconnectionstatechange = async () => {
+  console.log("WebRTC connection state:", pc.connectionState)
 
   if (pc.connectionState === "connected") {
     setCallStatus("connected")
-    if (!startedRef.current) startedRef.current = Date.now()
+
+    if (!startedRef.current) {
+      startedRef.current = Date.now()
+    }
   }
 
-  if (["failed", "closed"].includes(pc.connectionState)) {
+  if (pc.connectionState === "disconnected") {
+    console.log("Connection temporarily lost. Waiting for recovery...")
+
+    setTimeout(() => {
+      if (pc.connectionState === "disconnected") {
+        console.log("Connection did not recover")
+        endCall(false)
+      }
+    }, 10000)
+  }
+
+  if (pc.connectionState === "failed") {
+    console.log("Connection failed. Restarting ICE...")
+
+    try {
+      const offer = await pc.createOffer({
+        iceRestart: true,
+      })
+
+      await pc.setLocalDescription(offer)
+
+      await socialApi.sendSignal({
+        fromUser: selfUsername,
+        toUser: recipientUsername,
+        callId,
+        type: "offer",
+        payload: offer,
+      })
+    } catch (error) {
+      console.error("ICE restart error:", error)
+      endCall(false)
+    }
+  }
+
+  if (pc.connectionState === "closed") {
     endCall(false)
   }
 }
