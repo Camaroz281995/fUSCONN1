@@ -1,4 +1,4 @@
-import type { Post, Comment, MarketplaceListing, Story, FriendList, VirtualPet, MusicTrack, MusicPlaylist, LiveStream, LiveStreamComment, Message, Conversation, FriendRequest, Notification } from "[...]"
+import type { Post, Comment, MarketplaceListing, Story, FriendList, VirtualPet, MusicTrack, MusicPlaylist, LiveStream, LiveStreamComment, Message, Conversation, FriendRequest, Notification } from "./types"
 
 // Define basic types here to avoid import issues
 interface StoryItem {
@@ -54,8 +54,7 @@ async getPosts(): Promise<Post[]> {
     return data.posts || []
   } catch (error) {
     console.error("Error loading posts:", error)
-    // Fallback to localStorage
-    return getFromStorage<Post[]>("fusion_connect_posts", [])
+    return []
   }
 }
 
@@ -91,10 +90,6 @@ async savePost(post: Post): Promise<void> {
 
   } catch (error) {
     console.error("Error saving post:", error)
-    // Fallback to localStorage
-    const posts = getFromStorage<Post[]>("fusion_connect_posts", [])
-    posts.unshift(post)
-    saveToStorage("fusion_connect_posts", posts)
   }
 }
 
@@ -108,14 +103,10 @@ deletePost(postId: string): void {
   console.warn(
     "Delete post still uses local storage. Add /api/posts DELETE route to enable database deletion."
   )
-  const posts = getFromStorage<Post[]>("fusion_connect_posts", [])
-  const updatedPosts = posts.filter((post) => post.id !== postId)
-  saveToStorage("fusion_connect_posts", updatedPosts)
 }
-
   // Comments
   addComment(postId: string, comment: Comment): void {
-    const posts = getFromStorage<Post[]>("fusion_connect_posts", [])
+    const posts = this.getPosts()
     const postIndex = posts.findIndex((p) => p.id === postId)
 
     if (postIndex >= 0) {
@@ -134,7 +125,7 @@ deletePost(postId: string): void {
 
   // Likes
   toggleLike(postId: string, username: string): void {
-    const posts = getFromStorage<Post[]>("fusion_connect_posts", [])
+    const posts = this.getPosts()
     const postIndex = posts.findIndex(p => p.id === postId)
     if (postIndex !== -1) {
       if (!posts[postIndex].likes) {
