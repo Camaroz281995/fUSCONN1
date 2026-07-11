@@ -1,16 +1,19 @@
 import { neon } from "@neondatabase/serverless"
 
 // Shared database connection for all social features.
-// Uses the existing Postgres connection already configured for posts/auth.
+// Uses the existing Postgres connection configured in Vercel.
 export function getDB() {
   const url =
-    process.env.fusconn_DATABASE_URL_UNPOOLED ||
-    process.env.fusconn_DATABASE_URL ||
-    process.env.fusconn_POSTGRES_URL
-  if (!url) throw new Error("No database URL configured")
+    process.env.fUSCONN_DATABASE_URL ||
+    process.env.fUSCONN_POSTGRES_URL ||
+    process.env.fUSCONN_POSTGRES_URL_NON_POOLING
+
+  if (!url) {
+    throw new Error("No database URL configured")
+  }
+
   return neon(url)
 }
-
 let schemaReady: Promise<void> | null = null
 
 // Lazily create the tables required for messaging, calls, and safety features.
