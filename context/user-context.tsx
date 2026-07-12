@@ -1,189 +1,254 @@
-import { NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+"use client"
 
-function getDB() {
-  const url =
-    process.env.fUSCONN_DATABASE_URL ||
-    process.env.fUSCONN_POSTGRES_URL ||
-    process.env.fUSCONN_POSTGRES_URL_NON_POOLING
+import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
 
-  if (!url) {
-    throw new Error("No database URL configured")
-  }
+export interface AuthUser {
+  id: number
+  username: string
+  fullName?: string
+  bio?: string
+  profilePhoto?: string | null
+}
 
-  return neon(url)
+interface UserContextType {
+  id: number | null
+  username: string
+  setUsername: (username: string) => void
+  fullName: string
+  bio: string
+  profilePhoto: string | null
+  setProfilePhoto: (url: string | null) => void
+  following: string[]
+  addFollowing: (username: string) => void
+  removeFollowing: (username: string) => void
+  isFollowing: (username: string) => boolean
+  login: (user: AuthUser) => void
+  logout: () => void
+  isLoggedIn: boolean
 }
 
 
-export async function GET() {
-  try {
-    const sql = getDB()
+const UserContext = createContext<UserContextType>({
+  id: null,
+  username: "",
+  setUsername: () => {},
+  fullName: "",
+  bio: "",
+  profilePhoto: null,
+  setProfilePhoto: () => {},
+  following: [],
+  addFollowing: () => {},
+  removeFollowing: () => {},
+  isFollowing: () => false,
+  login: () => {},
+  logout: () => {},
+  isLoggedIn: false,
+})
 
-    const posts = await sql`
-      SELECT
-        p.*,
 
-        COALESCE(
-          (
-            SELECT json_agg(
-              jsonb_build_object(
-                'username', pl.username
-              )
-            )
-            FROM post_likes pl
-            WHERE pl.post_id = p.id
-          ),
-          '[]'::json
-        ) AS likes,
+export const useUser = () => useContext(UserContext)
 
-        COALESCE(
-          (
-            SELECT json_agg(
-              jsonb_build_object(
-                'id', c.id,
-                'username', c.username,
-                'content', c.content,
-                'created_at', c.created_at
-              )
-              ORDER BY c.created_at ASC
-            )
-            FROM comments c
-            WHERE c.post_id = p.id
-          ),
-          '[]'::json
-        ) AS comments
 
-      FROM posts p
-      ORDER BY p.created_at DESC
-      LIMIT 50
-    `
+export const UserProvider = ({
+  children
+}: {
+  children: ReactNode
+}) => {
 
-    console.log("GET /api/posts - Returned posts:", posts.length)
+  const [id, setId] = useState<number | null>(null)
+  const [username, setUsernameState] = useState("")
+  const [fullName, setFullName] = useState("")
+  const [bio, setBio] = useState("")
+  const [profilePhoto, setProfilePhotoState] = useState<string | null>(null)
+  const [following, setFollowing] = useState<string[]>([])
 
-    return NextResponse.json(
-      { posts },
-      {
-        headers: {
-          "Cache-Control": "no-store, max-age=0",
-        },
+
+  useEffect(() => {
+
+    if (typeof window === "undefined") return
+
+    try {
+
+      const stored = localStorage.getItem("fusconn_user")
+
+      if (stored) {
+
+        const user: AuthUser = JSON.parse(stored)
+
+        setId(user.id || null)
+        setUsernameState(user.username || "")
+        setFullName(user.fullName || "")
+        setBio(user.bio || "")
+        setProfilePhotoState(user.profilePhoto || null)
+
       }
-    )
-
-  } catch (err) {
-    console.error("GET /api/posts error:", err)
-
-    return NextResponse.json(
-      { error: "Failed to fetch posts" },
-      { status: 500 }
-    )
-  }
-}
 
 
+      const storedFollowing =
+        localStorage.getItem("fusconn_following")
 
-export async function POST(request: NextRequest) {
-  try {
-    const sql = getDB()
-
-    const body = await request.json()
-
-    console.log("========== NEW POST REQUEST ==========")
-    console.log("Received body:", body)
-    console.log("Username received:", body.username)
-    console.log("Content received:", body.content)
-    console.log("======================================")
-
-    const {
-      username,
-      content,
-      imageUrl,
-      videoUrl,
-      gifUrl,
-    } = body
+      if (storedFollowing) {
+        setFollowing(JSON.parse(storedFollowing))
+      }
 
 
-    if (!username || !content?.trim()) {
+    } catch (error) {
 
-      console.error("POST rejected - Missing username or content:", {
-        username,
-        content
-      })
+      console.error("User loading error:", error)
 
-      return NextResponse.json(
-        {
-          error: "Username and content are required",
-        },
-        {
-          status: 400,
-        }
-      )
     }
 
-
-    const id = `post_${Date.now()}_${Math.random()
-      .toString(36)
-      .substring(2, 9)}`
+  }, [])
 
 
-    const createdAt = Date.now()
+
+  const login = (user: AuthUser) => {
+
+    setId(user.id)
+    setUsernameState(user.username)
+    setFullName(user.fullName || "")
+    setBio(user.bio || "")
+    setProfilePhotoState(user.profilePhoto || null)
+
+    localStorage.setItem(
+      "fusconn_user",
+      JSON.stringify(user)
+    )
+
+  }
 
 
-    console.log("Saving post to database:", {
-      id,
-      username,
-      content,
-      createdAt
-    })
+
+  const logout = () => {
+
+    setId(null)
+    setUsernameState("")
+    setFullName("")
+    setBio("")
+    setProfilePhotoState(null)
+    setFollowing([])
+
+    localStorage.removeItem("fusconn_user")
+    localStorage.removeItem("fusconn_following")
+
+  }
 
 
-    await sql`
-      INSERT INTO posts (
+
+  const setUsername = (newUsername:string) => {
+
+    setUsernameState(newUsername)
+
+    const stored =
+      localStorage.getItem("fusconn_user")
+
+    const user = stored
+      ? JSON.parse(stored)
+      : {}
+
+    user.username = newUsername
+
+    localStorage.setItem(
+      "fusconn_user",
+      JSON.stringify(user)
+    )
+
+  }
+
+
+
+  const setProfilePhoto = (url:string|null) => {
+
+    setProfilePhotoState(url)
+
+    const stored =
+      localStorage.getItem("fusconn_user")
+
+    const user = stored
+      ? JSON.parse(stored)
+      : {}
+
+    user.profilePhoto = url
+
+    localStorage.setItem(
+      "fusconn_user",
+      JSON.stringify(user)
+    )
+
+  }
+
+
+
+  const addFollowing = (userToFollow:string) => {
+
+    if (
+      userToFollow === username ||
+      following.includes(userToFollow)
+    ) return
+
+
+    const next = [
+      ...following,
+      userToFollow
+    ]
+
+    setFollowing(next)
+
+    localStorage.setItem(
+      "fusconn_following",
+      JSON.stringify(next)
+    )
+
+  }
+
+
+
+  const removeFollowing = (userToUnfollow:string) => {
+
+    const next =
+      following.filter(
+        u => u !== userToUnfollow
+      )
+
+    setFollowing(next)
+
+    localStorage.setItem(
+      "fusconn_following",
+      JSON.stringify(next)
+    )
+
+  }
+
+
+
+  return (
+
+    <UserContext.Provider
+
+      value={{
         id,
         username,
-        content,
-        image_url,
-        video_url,
-        gif_url,
-        created_at
-      )
-      VALUES (
-        ${id},
-        ${username},
-        ${content.trim()},
-        ${imageUrl || null},
-        ${videoUrl || null},
-        ${gifUrl || null},
-        ${createdAt}
-      )
-    `
+        setUsername,
+        fullName,
+        bio,
+        profilePhoto,
+        setProfilePhoto,
+        following,
+        addFollowing,
+        removeFollowing,
+        isFollowing:
+          (u) => following.includes(u),
+        login,
+        logout,
+        isLoggedIn: !!username
+      }}
 
+    >
 
-    console.log("SUCCESS: Post saved:", id)
+      {children}
 
+    </UserContext.Provider>
 
-    return NextResponse.json(
-      {
-        success: true,
-        id,
-      },
-      {
-        status: 201,
-      }
-    )
+  )
 
-
-  } catch (err) {
-
-    console.error("POST /api/posts error:", err)
-
-
-    return NextResponse.json(
-      {
-        error: "Failed to create post",
-      },
-      {
-        status: 500,
-      }
-    )
-  }
 }
