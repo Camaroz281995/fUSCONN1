@@ -48,7 +48,7 @@ export default function ClubsPage() {
         </h1>
 
         <p className="mt-2">
-          Create a club. Invite people. Build a community.
+          Create a club. Invite people. Build a community. You Belong.
         </p>
 
       </div>
