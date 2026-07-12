@@ -13,6 +13,8 @@ function getDB() {
 
   return neon(url)
 }
+
+
 export async function GET() {
   try {
     const sql = getDB()
@@ -20,6 +22,8 @@ export async function GET() {
     const posts = await sql`
       SELECT
         p.*,
+        u.username AS author_username,
+        u.id AS author_id,
 
         COALESCE(
           (
@@ -52,9 +56,13 @@ export async function GET() {
         ) AS comments
 
       FROM posts p
+      LEFT JOIN users u
+      ON p.user_id = u.id
+
       ORDER BY p.created_at DESC
       LIMIT 50
     `
+
 
     return NextResponse.json(
       { posts },
@@ -65,27 +73,33 @@ export async function GET() {
       }
     )
 
+
   } catch (err) {
+
     console.error("GET /api/posts error:", err)
 
     return NextResponse.json(
-      { error: "Failed to fetch posts" },
+      {
+        error: "Failed to fetch posts",
+      },
       {
         status: 500,
-        headers: {
-          "Cache-Control": "no-store",
-        },
       }
     )
   }
 }
 
 
+
 export async function POST(request: NextRequest) {
+
   try {
+
     const sql = getDB()
 
+
     const {
+      userId,
       username,
       content,
       imageUrl,
@@ -93,43 +107,77 @@ export async function POST(request: NextRequest) {
       gifUrl,
     } = await request.json()
 
-    if (!username || !content?.trim()) {
+
+    console.log("Creating post:", {
+      userId,
+      username,
+      content
+    })
+
+
+    if (!userId || !username || !content?.trim()) {
+
       return NextResponse.json(
         {
-          error: "Username and content are required",
+          error: "User ID, username, and content are required",
         },
         {
           status: 400,
         }
       )
+
     }
 
-    const id = `post_${Date.now()}_${Math.random()
+
+
+    const id =
+      `post_${Date.now()}_${Math.random()
       .toString(36)
-      .substring(2, 9)}`
+      .substring(2,9)}`
+
 
     const createdAt = Date.now()
 
+
+
     await sql`
+
       INSERT INTO posts (
+
         id,
+        user_id,
         username,
         content,
         image_url,
         video_url,
         gif_url,
         created_at
+
       )
+
       VALUES (
+
         ${id},
+        ${userId},
         ${username},
         ${content.trim()},
         ${imageUrl || null},
         ${videoUrl || null},
         ${gifUrl || null},
         ${createdAt}
+
       )
+
     `
+
+
+
+    console.log("Post saved:", {
+      id,
+      userId
+    })
+
+
 
     return NextResponse.json(
       {
@@ -141,8 +189,11 @@ export async function POST(request: NextRequest) {
       }
     )
 
+
   } catch (err) {
+
     console.error("POST /api/posts error:", err)
+
 
     return NextResponse.json(
       {
@@ -150,10 +201,9 @@ export async function POST(request: NextRequest) {
       },
       {
         status: 500,
-        headers: {
-          "Cache-Control": "no-store",
-        },
       }
     )
+
   }
+
 }
