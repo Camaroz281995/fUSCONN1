@@ -14,6 +14,126 @@ function getDB() {
   return neon(url)
 }
 
+function parseDataUrl(value: unknown) {
+  if (
+    typeof value !== "string" ||
+    !value.startsWith("data:")
+  ) {
+    return null
+  }
+
+  const match = value.match(
+    /^data:([^;,]+);base64,(.+)$/s
+  )
+
+  if (!match) {
+    return null
+  }
+
+  return {
+    mimeType: match[1],
+    base64: match[2],
+  }
+}
+
+function dataUrlToBuffer(value: unknown) {
+  const parsed = parseDataUrl(value)
+
+  if (!parsed) {
+    return null
+  }
+
+  return {
+    mimeType: parsed.mimeType,
+    buffer: Buffer.from(
+      parsed.base64,
+      "base64"
+    ),
+  }
+}
+
+function detectImageMime(buffer: Buffer) {
+  if (
+    buffer.length >= 8 &&
+    buffer.subarray(0, 8).equals(
+      Buffer.from([
+        0x89,
+        0x50,
+        0x4e,
+        0x47,
+        0x0d,
+        0x0a,
+        0x1a,
+        0x0a,
+      ])
+    )
+  ) {
+    return "image/png"
+  }
+
+  if (
+    buffer.length >= 3 &&
+    buffer[0] === 0xff &&
+    buffer[1] === 0xd8 &&
+    buffer[2] === 0xff
+  ) {
+    return "image/jpeg"
+  }
+
+  if (
+    buffer.length >= 6 &&
+    buffer
+      .subarray(0, 6)
+      .toString("ascii")
+      .startsWith("GIF")
+  ) {
+    return "image/gif"
+  }
+
+  if (
+    buffer.length >= 12 &&
+    buffer
+      .subarray(0, 4)
+      .toString("ascii") === "RIFF" &&
+    buffer
+      .subarray(8, 12)
+      .toString("ascii") === "WEBP"
+  ) {
+    return "image/webp"
+  }
+
+  return "image/jpeg"
+}
+
+function detectVideoMime(buffer: Buffer) {
+  if (
+    buffer.length >= 12 &&
+    buffer
+      .subarray(4, 8)
+      .toString("ascii") === "ftyp"
+  ) {
+    return "video/mp4"
+  }
+
+  if (
+    buffer.length >= 4 &&
+    buffer
+      .subarray(0, 4)
+      .equals(
+        Buffer.from([
+          0x1a,
+          0x45,
+          0xdf,
+          0xa3,
+        ])
+      )
+  ) {
+    return "video/webm"
+  }
+
+  return "video/mp4"
+}
+
 export async function GET() {
   try {
     const sql = getDB()
@@ -29,26 +149,61 @@ export async function GET() {
         CASE
           WHEN p.image_data IS NOT NULL
           THEN
-            'data:image/jpeg;base64,' ||
-            encode(p.image_data, 'base64')
-          ELSE NULL
-        END AS image_url,
+            CASE
+              WHEN substring(p.image_data from 1 for 8) =
+                decode('89504e470d0a1a0a', 'hex')
+              THEN
+                'data:image/png;base64,' ||
+                encode(p.image_data, 'base64')
 
-        CASE
-          WHEN p.video_data IS NOT NULL
-          THEN
-            'data:video/mp4;base64,' ||
-            encode(p.video_data, 'base64')
-          ELSE NULL
-        END AS video_url,
+              WHEN substring(p.image_data from 1 for 3) =
+                decode('ffd8ff', 'hex')
+              THEN
+                'data:image/jpeg;base64,' ||
+                encode(p.image_data, 'base64')
+
+              WHEN substring(p.image_data from 1 for 4) =
+                decode('52494646', 'hex')
+                AND substring(p.image_data from 9 for 4) =
+                decode('57454250', 'hex')
+              THEN
+                'data:image/webp;base64,' ||
+                encode(p.image_data, 'base64')
+
+              ELSE
+                'data:image/jpeg;base64,' ||
+                encode(p.image_data, 'base64')
+            END
+
+          ELSE p.image_url
+        END AS image_url,
 
         CASE
           WHEN p.gif_data IS NOT NULL
           THEN
             'data:image/gif;base64,' ||
             encode(p.gif_data, 'base64')
-          ELSE NULL
+
+          ELSE p.gif_url
         END AS gif_url,
+
+        CASE
+          WHEN p.video_data IS NOT NULL
+          THEN
+            CASE
+              WHEN substring(p.video_data from 5 for 4) =
+                decode('66747970', 'hex')
+              THEN
+                'data:video/mp4;base64,' ||
+                encode(p.video_data, 'base64')
+
+              ELSE
+                'data:video/webm;base64,' ||
+                encode(p.video_data, 'base64')
+            END
+
+          ELSE p.video_url
+        END AS video_url,
 
         u.username AS author_username,
         u.id AS author_id,
@@ -97,12 +252,16 @@ export async function GET() {
       { posts },
       {
         headers: {
-          "Cache-Control": "no-store, max-age=0",
+          "Cache-Control":
+            "no-store, max-age=0",
         },
       }
     )
-  } catch (err) {
-    console.error("GET /api/posts error:", err)
+  } catch (error) {
+    console.error(
+      "GET /api/posts error:",
+      error
+    )
 
     return NextResponse.json(
       {
@@ -115,7 +274,9 @@ export async function GET() {
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(
+  request: NextRequest
+) {
   try {
     const sql = getDB()
 
@@ -123,12 +284,16 @@ export async function POST(request: NextRequest) {
       userId,
       username,
       content,
+      imageUrl,
+      videoUrl,
+      gifUrl,
     } = await request.json()
 
-    if (!userId || !username || !content?.trim()) {
+    if (!userId || !username) {
       return NextResponse.json(
         {
-          error: "User ID, username, and content are required",
+          error:
+            "User ID and username are required",
         },
         {
           status: 400,
@@ -136,12 +301,50 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const hasContent =
+      typeof content === "string" &&
+      content.trim().length > 0
+
+    const imageData =
+      dataUrlToBuffer(imageUrl)
+
+    const videoData =
+      dataUrlToBuffer(videoUrl)
+
+    const gifData =
+      dataUrlToBuffer(gifUrl)
+
+    const storedImageUrl =
+      imageData ? null : imageUrl || null
+
+    const storedVideoUrl =
+      videoData ? null : videoUrl || null
+
+    const storedGifUrl =
+      gifData ? null : gifUrl || null
+
     const id =
       `post_${Date.now()}_${Math.random()
         .toString(36)
         .substring(2, 9)}`
 
     const createdAt = Date.now()
+
+    let imageBytes: Buffer | null = null
+    let videoBytes: Buffer | null = null
+    let gifBytes: Buffer | null = null
+
+    if (imageData) {
+      imageBytes = imageData.buffer
+    }
+
+    if (videoData) {
+      videoBytes = videoData.buffer
+    }
+
+    if (gifData) {
+      gifBytes = gifData.buffer
+    }
 
     await sql`
       INSERT INTO posts (
@@ -161,25 +364,34 @@ export async function POST(request: NextRequest) {
         ${id},
         ${userId},
         ${username},
-        ${content.trim()},
-        NULL,
-        NULL,
-        NULL,
-        NULL,
-        NULL,
-        NULL,
+        ${hasContent
+          ? content.trim()
+          : ""},
+        ${storedImageUrl},
+        ${storedVideoUrl},
+        ${storedGifUrl},
+        ${imageBytes},
+        ${videoBytes},
+        ${gifBytes},
         ${createdAt}
       )
     `
 
-    // Check the 450 MB limit after creating the post.
+    let cleanupResult = null
+
     try {
-      await sql`
-        SELECT public.cleanup_posts_by_size()
-      `
+      const cleanup =
+        await sql`
+          SELECT *
+          FROM public.cleanup_posts_by_size()
+        `
+
+      cleanupResult =
+        cleanup[0] || null
 
       console.log(
-        "fUSCONN storage check completed"
+        "fUSCONN storage check:",
+        cleanupResult
       )
     } catch (cleanupError) {
       console.error(
@@ -192,17 +404,22 @@ export async function POST(request: NextRequest) {
       {
         success: true,
         id,
+        cleanup: cleanupResult,
       },
       {
         status: 201,
       }
     )
-  } catch (err) {
-    console.error("POST /api/posts error:", err)
+  } catch (error) {
+    console.error(
+      "POST /api/posts error:",
+      error
+    )
 
     return NextResponse.json(
       {
-        error: "Failed to create post",
+        error:
+          "Failed to create post",
       },
       {
         status: 500,
