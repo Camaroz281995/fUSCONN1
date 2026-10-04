@@ -1,3 +1,4 @@
+```typescript
 import { NextRequest, NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
 
@@ -13,7 +14,6 @@ function getDB() {
 
   return neon(url)
 }
-
 
 export async function GET() {
   try {
@@ -57,12 +57,11 @@ export async function GET() {
 
       FROM posts p
       LEFT JOIN users u
-      ON p.user_id = u.id
+        ON p.user_id = u.id
 
       ORDER BY p.created_at DESC
       LIMIT 50
     `
-
 
     return NextResponse.json(
       { posts },
@@ -72,10 +71,7 @@ export async function GET() {
         },
       }
     )
-
-
   } catch (err) {
-
     console.error("GET /api/posts error:", err)
 
     return NextResponse.json(
@@ -89,14 +85,9 @@ export async function GET() {
   }
 }
 
-
-
 export async function POST(request: NextRequest) {
-
   try {
-
     const sql = getDB()
-
 
     const {
       userId,
@@ -107,16 +98,13 @@ export async function POST(request: NextRequest) {
       gifUrl,
     } = await request.json()
 
-
     console.log("Creating post:", {
       userId,
       username,
-      content
+      content,
     })
 
-
     if (!userId || !username || !content?.trim()) {
-
       return NextResponse.json(
         {
           error: "User ID, username, and content are required",
@@ -125,25 +113,17 @@ export async function POST(request: NextRequest) {
           status: 400,
         }
       )
-
     }
-
-
 
     const id =
       `post_${Date.now()}_${Math.random()
-      .toString(36)
-      .substring(2,9)}`
-
+        .toString(36)
+        .substring(2, 9)}`
 
     const createdAt = Date.now()
 
-
-
     await sql`
-
       INSERT INTO posts (
-
         id,
         user_id,
         username,
@@ -152,11 +132,8 @@ export async function POST(request: NextRequest) {
         video_url,
         gif_url,
         created_at
-
       )
-
       VALUES (
-
         ${id},
         ${userId},
         ${username},
@@ -165,19 +142,31 @@ export async function POST(request: NextRequest) {
         ${videoUrl || null},
         ${gifUrl || null},
         ${createdAt}
-
       )
-
     `
-
-
 
     console.log("Post saved:", {
       id,
-      userId
+      userId,
     })
 
+    // Check the Neon database size after the post is created.
+    // If the database has reached 450 MB, the PostgreSQL
+    // cleanup function will delete all posts and media.
+    try {
+      await sql`
+        SELECT public.cleanup_posts_by_size()
+      `
 
+      console.log("fUSCONN storage check completed")
+    } catch (cleanupError) {
+      // A storage-check failure should not prevent
+      // the post itself from being created.
+      console.error(
+        "fUSCONN storage cleanup check failed:",
+        cleanupError
+      )
+    }
 
     return NextResponse.json(
       {
@@ -188,12 +177,8 @@ export async function POST(request: NextRequest) {
         status: 201,
       }
     )
-
-
   } catch (err) {
-
     console.error("POST /api/posts error:", err)
-
 
     return NextResponse.json(
       {
@@ -203,7 +188,6 @@ export async function POST(request: NextRequest) {
         status: 500,
       }
     )
-
   }
-
 }
+```
