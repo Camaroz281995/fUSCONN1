@@ -1,4 +1,3 @@
-```typescript
 import { NextRequest, NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
 
@@ -21,7 +20,36 @@ export async function GET() {
 
     const posts = await sql`
       SELECT
-        p.*,
+        p.id,
+        p.user_id,
+        p.username,
+        p.content,
+        p.created_at,
+
+        CASE
+          WHEN p.image_data IS NOT NULL
+          THEN
+            'data:image/jpeg;base64,' ||
+            encode(p.image_data, 'base64')
+          ELSE NULL
+        END AS image_url,
+
+        CASE
+          WHEN p.video_data IS NOT NULL
+          THEN
+            'data:video/mp4;base64,' ||
+            encode(p.video_data, 'base64')
+          ELSE NULL
+        END AS video_url,
+
+        CASE
+          WHEN p.gif_data IS NOT NULL
+          THEN
+            'data:image/gif;base64,' ||
+            encode(p.gif_data, 'base64')
+          ELSE NULL
+        END AS gif_url,
+
         u.username AS author_username,
         u.id AS author_id,
 
@@ -56,10 +84,12 @@ export async function GET() {
         ) AS comments
 
       FROM posts p
+
       LEFT JOIN users u
         ON p.user_id = u.id
 
       ORDER BY p.created_at DESC
+
       LIMIT 50
     `
 
@@ -93,16 +123,7 @@ export async function POST(request: NextRequest) {
       userId,
       username,
       content,
-      imageUrl,
-      videoUrl,
-      gifUrl,
     } = await request.json()
-
-    console.log("Creating post:", {
-      userId,
-      username,
-      content,
-    })
 
     if (!userId || !username || !content?.trim()) {
       return NextResponse.json(
@@ -131,6 +152,9 @@ export async function POST(request: NextRequest) {
         image_url,
         video_url,
         gif_url,
+        image_data,
+        video_data,
+        gif_data,
         created_at
       )
       VALUES (
@@ -138,27 +162,25 @@ export async function POST(request: NextRequest) {
         ${userId},
         ${username},
         ${content.trim()},
-        ${imageUrl || null},
-        ${videoUrl || null},
-        ${gifUrl || null},
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+        NULL,
         ${createdAt}
       )
     `
 
-    console.log("Post saved:", {
-      id,
-      userId,
-    })
-
-    // Check the Neon database size after creating the post.
-    // If the database has reached 450 MB, the PostgreSQL
-    // cleanup function deletes all posts and media.
+    // Check the 450 MB limit after creating the post.
     try {
       await sql`
         SELECT public.cleanup_posts_by_size()
       `
 
-      console.log("fUSCONN storage check completed")
+      console.log(
+        "fUSCONN storage check completed"
+      )
     } catch (cleanupError) {
       console.error(
         "fUSCONN storage cleanup check failed:",
@@ -188,4 +210,3 @@ export async function POST(request: NextRequest) {
     )
   }
 }
-```
