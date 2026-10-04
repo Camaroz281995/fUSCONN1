@@ -13,21 +13,13 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 
-import {
-  Button,
-} from "@/components/ui/button"
+import { Button } from "@/components/ui/button"
 
-import {
-  Textarea,
-} from "@/components/ui/textarea"
+import { Textarea } from "@/components/ui/textarea"
 
-import {
-  Input,
-} from "@/components/ui/input"
+import { Input } from "@/components/ui/input"
 
-import {
-  Badge,
-} from "@/components/ui/badge"
+import { Badge } from "@/components/ui/badge"
 
 import {
   Tabs,
@@ -73,6 +65,9 @@ export default function PostTab() {
   const [devicePhoto, setDevicePhoto] =
     useState<string | null>(null)
 
+  const [devicePhotoType, setDevicePhotoType] =
+    useState<"image" | "gif">("image")
+
   const [deviceVideo, setDeviceVideo] =
     useState<string | null>(null)
 
@@ -85,17 +80,16 @@ export default function PostTab() {
   const [mailboxUnreadCount, setMailboxUnreadCount] =
     useState(0)
 
+  const [isSubmitting, setIsSubmitting] =
+    useState(false)
+
   const fileInputRef =
     useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!username) return
 
-    const updateUnread = () => {
-      setMailboxUnreadCount(0)
-    }
-
-    updateUnread()
+    setMailboxUnreadCount(0)
   }, [username])
 
   const handleSubmit = async (
@@ -108,17 +102,30 @@ export default function PostTab() {
       return
     }
 
+    const finalImageUrl =
+      devicePhoto ||
+      imageUrl
+
+    const finalVideoUrl =
+      deviceVideo ||
+      videoUrl
+
+    const finalGifUrl =
+      devicePhotoType === "gif"
+        ? devicePhoto
+        : gifUrl
+
     if (
       !content.trim() &&
-      !imageUrl &&
-      !videoUrl &&
-      !gifUrl &&
-      !devicePhoto &&
-      !deviceVideo
+      !finalImageUrl &&
+      !finalVideoUrl &&
+      !finalGifUrl
     ) {
       alert("Please add something!")
       return
     }
+
+    setIsSubmitting(true)
 
     const mentions =
       content
@@ -130,7 +137,8 @@ export default function PostTab() {
     const post: Post = {
       id: Date.now().toString(),
       username,
-      content: content.trim(),
+      content:
+        content.trim(),
       timestamp: Date.now(),
       likes: [],
       comments: [],
@@ -140,32 +148,22 @@ export default function PostTab() {
           : undefined,
     }
 
-    if (imageUrl || devicePhoto) {
+    if (finalImageUrl) {
       post.imageUrl =
-        imageUrl ||
-        devicePhoto ||
-        undefined
+        devicePhotoType === "image"
+          ? finalImageUrl
+          : undefined
     }
 
-    if (videoUrl || deviceVideo) {
+    if (finalVideoUrl) {
       post.videoUrl =
-        videoUrl ||
-        deviceVideo ||
-        undefined
+        finalVideoUrl
     }
 
-    if (gifUrl) {
-      post.gifUrl = gifUrl
+    if (finalGifUrl) {
+      post.gifUrl =
+        finalGifUrl
     }
-
-    window.dispatchEvent(
-      new CustomEvent(
-        "newPostCreated",
-        {
-          detail: post,
-        }
-      )
-    )
 
     try {
       const response =
@@ -179,8 +177,7 @@ export default function PostTab() {
             userId: id,
             username,
             content:
-              post.content ||
-              "(shared media)",
+              post.content,
             imageUrl:
               post.imageUrl,
             videoUrl:
@@ -207,9 +204,25 @@ export default function PostTab() {
 
       window.dispatchEvent(
         new CustomEvent(
-          "newPostCreated"
+          "newPostCreated",
+          {
+            detail: post,
+          }
         )
       )
+
+      setContent("")
+      setImageUrl("")
+      setVideoUrl("")
+      setGifUrl("")
+      setDevicePhoto(null)
+      setDevicePhotoType("image")
+      setDeviceVideo(null)
+      setActiveTab("text")
+
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ""
+      }
     } catch (error) {
       console.error(
         "Post creation failed:",
@@ -217,19 +230,13 @@ export default function PostTab() {
       )
 
       alert(
-        "The post could not be saved. Please try again."
+        error instanceof Error
+          ? error.message
+          : "The post could not be saved."
       )
-
-      return
+    } finally {
+      setIsSubmitting(false)
     }
-
-    setContent("")
-    setImageUrl("")
-    setVideoUrl("")
-    setGifUrl("")
-    setDevicePhoto(null)
-    setDeviceVideo(null)
-    setActiveTab("text")
   }
 
   const handleGifUpload = (
@@ -238,28 +245,37 @@ export default function PostTab() {
     const file =
       e.target.files?.[0]
 
+    if (!file) return
+
     if (
-      file &&
-      file.type === "image/gif"
+      file.type !==
+      "image/gif"
     ) {
-      const reader =
-        new FileReader()
-
-      reader.onload = () => {
-        setGifUrl(
-          reader.result as string
-        )
-      }
-
-      reader.readAsDataURL(file)
+      alert(
+        "Please select a GIF file."
+      )
+      return
     }
+
+    const reader =
+      new FileReader()
+
+    reader.onload = () => {
+      setGifUrl(
+        reader.result as string
+      )
+    }
+
+    reader.readAsDataURL(file)
   }
 
   if (isLoading) {
     return (
       <Card>
         <CardContent className="p-6 text-center">
-          <p>Loading your account...</p>
+          <p>
+            Loading your account...
+          </p>
         </CardContent>
       </Card>
     )
@@ -361,11 +377,22 @@ export default function PostTab() {
                 />
 
                 <DevicePhotoUpload
-                  onPhotoUploaded={(url) =>
+                  onPhotoUploaded={(
+                    url,
+                    type
+                  ) => {
                     setDevicePhoto(
                       url || null
                     )
-                  }
+
+                    setDevicePhotoType(
+                      type
+                    )
+
+                    if (type === "gif") {
+                      setGifUrl("")
+                    }
+                  }}
                   acceptGifs
                 />
 
@@ -404,15 +431,22 @@ export default function PostTab() {
             <Button
               type="submit"
               className="w-full"
+              disabled={
+                isSubmitting
+              }
             >
-              Create Post
+              {isSubmitting
+                ? "Saving Post..."
+                : "Create Post"}
             </Button>
           </form>
         </CardContent>
       </Card>
 
       <FusionaryMailbox
-        isOpen={isMailboxOpen}
+        isOpen={
+          isMailboxOpen
+        }
         onClose={() =>
           setIsMailboxOpen(false)
         }
