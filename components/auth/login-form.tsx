@@ -1,12 +1,30 @@
 "use client"
 
 import React, { useState } from "react"
+
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
+
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { AlertCircle, Loader2 } from "lucide-react"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+
+import {
+  AlertCircle,
+  Loader2,
+} from "lucide-react"
+
+import {
+  Alert,
+  AlertDescription,
+} from "@/components/ui/alert"
 
 import type { AuthUser } from "@/context/user-context"
 
@@ -15,49 +33,151 @@ interface LoginFormProps {
   onSwitchToSignup: () => void
 }
 
-export default function LoginForm({ onLoginSuccess, onSwitchToSignup }: LoginFormProps) {
-  const [username, setUsername] = useState("")
-  const [password, setPassword] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+export default function LoginForm({
+  onLoginSuccess,
+  onSwitchToSignup,
+}: LoginFormProps) {
+  const [username, setUsername] =
+    useState("")
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const [password, setPassword] =
+    useState("")
+
+  const [isLoading, setIsLoading] =
+    useState(false)
+
+  const [error, setError] =
+    useState<string | null>(null)
+
+  const handleLogin = async (
+    e: React.FormEvent
+  ) => {
     e.preventDefault()
+
     setError(null)
 
-    if (!username || !password) {
-      setError("Please enter both username and password")
+    if (!username.trim() || !password) {
+      setError(
+        "Please enter both username and password"
+      )
       return
     }
 
     setIsLoading(true)
 
     try {
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          username,
-          password,
-        }),
-      })
+      const response = await fetch(
+        "/api/auth/login",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+          body: JSON.stringify({
+            username:
+              username.trim().toLowerCase(),
+            password,
+          }),
+        }
+      )
 
-      const data = await response.json()
+      const data =
+        await response.json()
 
       if (!response.ok) {
-        throw new Error(data.error || "Login failed")
+        throw new Error(
+          data.error ||
+            "Login failed"
+        )
       }
 
-      onLoginSuccess({
-        username: data.username || username,
-        fullName: data.fullName,
-        bio: data.bio,
-        profilePhoto: data.profilePhoto,
-      })
+      /*
+       * The API returns:
+       *
+       * {
+       *   success: true,
+       *   user: {
+       *     id,
+       *     username,
+       *     fullName,
+       *     bio,
+       *     profilePhoto
+       *   }
+       * }
+       *
+       * So we need to use data.user,
+       * not data.username.
+       */
+
+      if (!data.user) {
+        throw new Error(
+          "Login succeeded, but no user information was returned."
+        )
+      }
+
+      if (
+        data.user.id === undefined ||
+        data.user.id === null
+      ) {
+        throw new Error(
+          "Login succeeded, but no user ID was returned."
+        )
+      }
+
+      const loggedInUser: AuthUser = {
+        id: Number(data.user.id),
+        username:
+          data.user.username ||
+          username.trim().toLowerCase(),
+        fullName:
+          data.user.fullName ||
+          "",
+        bio:
+          data.user.bio ||
+          "",
+        profilePhoto:
+          data.user.profilePhoto ||
+          null,
+      }
+
+      if (
+        !Number.isFinite(
+          loggedInUser.id
+        )
+      ) {
+        throw new Error(
+          "The account returned an invalid user ID."
+        )
+      }
+
+      console.log(
+        "fUSCONN login successful:",
+        {
+          id: loggedInUser.id,
+          username:
+            loggedInUser.username,
+        }
+      )
+
+      /*
+       * Send the COMPLETE user object
+       * to the parent/UserProvider.
+       */
+      onLoginSuccess(
+        loggedInUser
+      )
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred")
+      console.error(
+        "Login error:",
+        err
+      )
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "An error occurred while logging in."
+      )
     } finally {
       setIsLoading(false)
     }
@@ -66,54 +186,79 @@ export default function LoginForm({ onLoginSuccess, onSwitchToSignup }: LoginFor
   return (
     <Card className="w-full max-w-md mx-auto">
       <CardHeader className="text-center">
-        <img 
-          src="/images/fusconn-logo.png" 
-          alt="fUSCONN Logo" 
+        <img
+          src="/images/fusconn-logo.png"
+          alt="fUSCONN Logo"
           className="w-20 h-20 mx-auto mb-4 object-contain"
         />
+
         <CardTitle className="text-2xl bg-gradient-to-r from-blue-500 to-purple-600 bg-clip-text text-transparent">
           Welcome Back
         </CardTitle>
+
         <CardDescription>
           Log in to your fUSCONN account
         </CardDescription>
       </CardHeader>
+
       <CardContent>
-        <form onSubmit={handleLogin} className="space-y-4">
+        <form
+          onSubmit={handleLogin}
+          className="space-y-4"
+        >
           {error && (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
+
+              <AlertDescription>
+                {error}
+              </AlertDescription>
             </Alert>
           )}
 
           <div className="space-y-2">
-            <Label htmlFor="username">Username</Label>
+            <Label htmlFor="username">
+              Username
+            </Label>
+
             <Input
               id="username"
               type="text"
               placeholder="Enter your username"
               value={username}
-              onChange={(e) => setUsername(e.target.value.toLowerCase())}
+              onChange={(e) =>
+                setUsername(
+                  e.target.value
+                )
+              }
               disabled={isLoading}
+              autoComplete="username"
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
+            <Label htmlFor="password">
+              Password
+            </Label>
+
             <Input
               id="password"
               type="password"
               placeholder="Enter your password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) =>
+                setPassword(
+                  e.target.value
+                )
+              }
               disabled={isLoading}
+              autoComplete="current-password"
             />
           </div>
 
-          <Button 
-            type="submit" 
-            className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700" 
+          <Button
+            type="submit"
+            className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
             disabled={isLoading}
           >
             {isLoading ? (
@@ -127,10 +272,13 @@ export default function LoginForm({ onLoginSuccess, onSwitchToSignup }: LoginFor
           </Button>
         </form>
       </CardContent>
+
       <CardFooter className="flex justify-center">
         <Button
           variant="link"
-          onClick={onSwitchToSignup}
+          onClick={
+            onSwitchToSignup
+          }
           disabled={isLoading}
         >
           Don't have an account? Sign up
