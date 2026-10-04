@@ -150,9 +150,9 @@ export async function POST(request: NextRequest) {
       userId,
     })
 
-    // Check the Neon database size after the post is created.
+    // Check the Neon database size after creating the post.
     // If the database has reached 450 MB, the PostgreSQL
-    // cleanup function will delete all posts and media.
+    // cleanup function deletes all posts and media.
     try {
       await sql`
         SELECT public.cleanup_posts_by_size()
@@ -160,8 +160,6 @@ export async function POST(request: NextRequest) {
 
       console.log("fUSCONN storage check completed")
     } catch (cleanupError) {
-      // A storage-check failure should not prevent
-      // the post itself from being created.
       console.error(
         "fUSCONN storage cleanup check failed:",
         cleanupError
